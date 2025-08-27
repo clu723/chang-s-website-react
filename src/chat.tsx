@@ -1,13 +1,88 @@
+import { useState } from 'react'
+import HelpModal from './helpmodal'
 import './styles/chat.css'
 
+const API_URL = "https://chang-s-website-api.onrender.com/api/chatbot";
+
+type Message = { role: 'user' | 'bot'; text: string }
+
 export default function Chat() {
+    const [showHelp, setShowHelp] = useState(false)
+    const [messages, setMessages] = useState<Message[]>([])
+    const [input, setInput] = useState('')
+    const [listening, setListening] = useState(false)
+
+    const clear = () => { setInput('') }
+
+    const sendMessage = async () => {
+        if (!input.trim()) return
+        setMessages(prev => [...prev, { role: 'user', text: input.trim() }])
+        const botResponse = await callGeminiAPI(input.trim());
+        setMessages(prev => [...prev, { role: 'bot', text: botResponse }])
+        clear();
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        alert("Speech Recognition not supported in this browser.");
+        return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.interimResults = true;
+
+    recognition.onresult = function (event: any) {
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+            if (event.results[i].isFinal) {
+                console.log(event.results[i][0].transcript);
+                setInput(event.results[i][0].transcript + " ");
+            }
+        }
+    }
+
+    // Continuous results when mic is active
+    recognition.onend = function () {
+        if (listening) {
+            recognition.start();
+        }
+    };
+
+    const toggleMic = () => {
+        setListening(v => !v)
+        if (listening) {
+            recognition.start();
+        } else {
+            recognition.stop();
+        }
+    }
+
+    const callGeminiAPI = async (query: string) : Promise<string> => {
+        try {
+            const res = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: query })
+            });
+            const data = await res.json();
+            return data;
+        } catch (err) {
+            console.error(err);
+            return("Error fetching response.");
+        }
+    };
+
     return (
         <>
             <div className="chat-container">
                 <div className="messages" id="messages">
+                    {messages.map((m, i) => (
+                        <div key={i} className={`message ${m.role}`}>
+                            {m.text}
+                        </div>
+                    ))}
                 </div>
                 <div className="input-container">
-                    <button className="microphone" id="mic-button">
+                    <button className="microphone" id="mic-button" onClick={toggleMic}>
                         <span className=" microphone-icon">🎤</span>
                     </button>
                     <div className="input-container">
@@ -18,46 +93,27 @@ export default function Chat() {
                             placeholder="Click the microphone to start talking!"
                             autoComplete="off"
                             style={{ cursor: 'not-allowed' }}
-                            disabled
+                            value={input}
+                            onChange={e => setInput(e.target.value)}
+
                         />
-                        <button className="clear-btn" id="clear-btn" title="Clear">
+                        <button className="clear-btn" id="clear-btn" title="Clear" onClick={clear}>
                             Clear
                         </button>
-                        <button className="send-btn" id="send-btn" title="Send">
+                        <button className="send-btn" id="send-btn" title="Send" onClick={sendMessage}>
                             ➤
                         </button>
                     </div>
                 </div>
             </div>
-
-            <div id="help-modal" style={{ display: "block" }}>
-                <div className="help-backdrop">
-                </div>
-                <div className="help-content">
-                    <button id="help-close" className="help-close">&times;</button>
-                    <h2>Welcome to Chang's Personal Website!</h2>
-                    <div>
-                        <b>How to use this site:</b><br />
-                        <li>Turn up your volume!</li>
-                        <li>Click the microphone to start speaking to my assistant.</li>
-                        <li>Ask the assistant for info about Chang.</li>
-                        <li>
-                            Ask the assistant to navigate (e.g., &quot;Go to the projects page&quot;).
-                            <ul>
-                                <li>Available pages: <b>index, about, projects.</b></li>
-                            </ul>
-                        </li>
-                        <li>When finished speaking, click the arrow to send.</li>
-                        <br />
-                        <em>
-                            If nothing appears after closing this, please wait 15–25 seconds,
-                            my backend is on the free tier and it goes to sleep with inactivity xD
-                        </em>
-                        <br /><br />
-                        <em>Need help? Click the help button anytime!</em>
-                    </div>
-                </div>
-            </div>
+            <button
+                id="help-btn"
+                className="help-btn"
+                title="Help"
+                onClick={() => setShowHelp(true)}
+            >?
+            </button>
+            <HelpModal active={showHelp} onClose={() => setShowHelp(false)}></HelpModal>
         </>
     )
 }

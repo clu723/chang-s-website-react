@@ -1,4 +1,3 @@
-import './App.css'
 import Chat from './chat'
 import { Route, Routes } from 'react-router-dom';
 
@@ -9,5 +8,4 @@ function App() {
     </Routes>
   )
 }
-
 export default App
